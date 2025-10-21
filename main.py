@@ -131,6 +131,7 @@ try:
     duplication_variants = {}
     other_variants = []
     unparsed_variants = []
+    non_protein_variants = []
     
     print(f"Toplam {len(variant_ids)} patojenik varyant analiz ediliyor...\n")
     print(f"Referans Protein Uzunluğu: {len(sequence)} amino asit\n")
@@ -165,15 +166,19 @@ try:
                 
                 parsed = False
                 
-                missense_long = re.search(r'p\.([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2})', title)
-                missense_short = re.search(r'p\.([A-Z])(\d+)([A-Z])(?![a-z])', title)
-                nonsense_long = re.search(r'p\.([A-Z][a-z]{2})(\d+)(?:Ter|\*)', title)
-                nonsense_short = re.search(r'p\.([A-Z])(\d+)\*', title)
-                frameshift = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)(?:[A-Z][a-z]{2}|[A-Z])?fs', title)
-                deletion_single = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)del', title)
-                deletion_range = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)_([A-Z][a-z]{2}|[A-Z])(\d+)del', title)
-                insertion = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)_([A-Z][a-z]{2}|[A-Z])(\d+)ins', title)
-                duplication = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)dup', title)
+                if 'p.' in title:
+                    missense_long = re.search(r'p\.([A-Z][a-z]{2})(\d+)([A-Z][a-z]{2})', title)
+                    missense_short = re.search(r'p\.([A-Z])(\d+)([A-Z])(?![a-z])', title)
+                    nonsense_long = re.search(r'p\.([A-Z][a-z]{2})(\d+)(?:Ter|\*)', title)
+                    nonsense_short = re.search(r'p\.([A-Z])(\d+)\*', title)
+                    frameshift = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)(?:[A-Z][a-z]{2}|[A-Z])?fs', title)
+                    deletion_single = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)del', title)
+                    deletion_range = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)_([A-Z][a-z]{2}|[A-Z])(\d+)del', title)
+                    insertion = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)_([A-Z][a-z]{2}|[A-Z])(\d+)ins', title)
+                    duplication = re.search(r'p\.([A-Z][a-z]{2}|[A-Z])(\d+)dup', title)
+                else:
+                    missense_long = missense_short = nonsense_long = nonsense_short = None
+                    frameshift = deletion_single = deletion_range = insertion = duplication = None
                 
                 if missense_long or missense_short:
                     match = missense_long if missense_long else missense_short
@@ -326,6 +331,8 @@ try:
                 
                 if not parsed and 'p.' in title:
                     unparsed_variants.append(title)
+                elif not parsed and 'p.' not in title:
+                    non_protein_variants.append(title)
     
     sorted_changes = sorted(amino_acid_changes.items(), key=lambda x: x[1]['position'])
     sorted_nonsense = sorted(nonsense_variants.items(), key=lambda x: x[1]['position'])
@@ -337,6 +344,8 @@ try:
     total_parsed = (len(amino_acid_changes) + len(nonsense_variants) + 
                     len(frameshift_variants) + len(deletion_variants) + 
                     len(insertion_variants) + len(duplication_variants))
+    
+    total_accounted = total_parsed + len(position_mismatches) + len(unparsed_variants) + len(non_protein_variants)
     
     print(f"\n\n{'='*60}")
     print(f"Analiz Sonuçları - Mutasyon Türlerine Göre")
@@ -352,7 +361,10 @@ try:
     print(f"  - Duplication (Duplikasyon): {len(duplication_variants)}")
     print(f"\nToplam Parse Edilen: {total_parsed}")
     print(f"İzoform Uyumsuzluğu: {len(position_mismatches)}")
-    print(f"Parse Edilemeyen: {len(unparsed_variants)}")
+    print(f"Parse Edilemeyen (p. notasyonu ile): {len(unparsed_variants)}")
+    print(f"Protein Dışı Varyantlar (p. notasyonu yok): {len(non_protein_variants)}")
+    print(f"\nToplam Hesaba Katılan: {total_accounted}")
+    print(f"Eksik Varyant: {pathogenic_count - total_accounted}")
     print(f"{'='*60}\n")
     
     if position_mismatches:
@@ -443,12 +455,23 @@ try:
     
     if unparsed_variants:
         print(f"\n{'='*60}")
-        print(f"UYARI: Parse Edilemeyen Varyantlar ({len(unparsed_variants)})")
+        print(f"UYARI: Parse Edilemeyen Protein Varyantları ({len(unparsed_variants)})")
         print(f"{'='*60}\n")
+        print("Bu varyantlar 'p.' notasyonu içeriyor ancak mevcut regex'lerle parse edilemedi:")
         for title in unparsed_variants[:20]:
             print(f"  - {title}")
         if len(unparsed_variants) > 20:
             print(f"  ... ve {len(unparsed_variants) - 20} varyant daha")
+    
+    if non_protein_variants:
+        print(f"\n{'='*60}")
+        print(f"Protein Dışı Varyantlar ({len(non_protein_variants)})")
+        print(f"{'='*60}\n")
+        print("Bu varyantlar 'p.' notasyonu içermiyor (muhtemelen DNA seviyesinde varyantlar):")
+        for title in non_protein_variants[:20]:
+            print(f"  - {title}")
+        if len(non_protein_variants) > 20:
+            print(f"  ... ve {len(non_protein_variants) - 20} varyant daha")
     
     print(f"\n{'='*60}")
     print(f"Mutasyon Şiddeti Değerlendirmesi")
